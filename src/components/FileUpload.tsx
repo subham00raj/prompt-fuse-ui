@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
+import { Slider } from '@/components/ui/slider';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, X, FileText, Check, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -217,6 +218,9 @@ const FileUpload: React.FC = () => {
               value={config.name}
               onChange={(e) => setConfig(prev => ({ ...prev, name: e.target.value }))}
             />
+            <p className="text-xs text-muted-foreground mt-1">
+              💡 Use <code className="bg-secondary px-1 rounded">/</code> to create folders and <code className="bg-secondary px-1 rounded">{'{{variables}}'}</code> for template variables
+            </p>
           </div>
           
           <div className="space-y-2">
@@ -251,21 +255,23 @@ const FileUpload: React.FC = () => {
             </Select>
           </div>
           
-          <div className="space-y-2">
-            <Label>Temperature</Label>
-            <Select value={config.temperature.toString()} onValueChange={(value) => 
-              setConfig(prev => ({ ...prev, temperature: parseFloat(value) }))
-            }>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">0 - Deterministic</SelectItem>
-                <SelectItem value="0.3">0.3 - Focused</SelectItem>
-                <SelectItem value="0.7">0.7 - Balanced</SelectItem>
-                <SelectItem value="1">1 - Creative</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>Temperature</Label>
+              <span className="text-sm text-muted-foreground font-medium">{config.temperature}</span>
+            </div>
+            <Slider
+              value={[config.temperature]}
+              onValueChange={(value) => setConfig(prev => ({ ...prev, temperature: value[0] }))}
+              max={1}
+              min={0}
+              step={0.1}
+              className="w-full"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Deterministic</span>
+              <span>Creative</span>
+            </div>
           </div>
         </div>
       </Card>
