@@ -9,6 +9,8 @@ import { Slider } from '@/components/ui/slider';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, X, FileText, Check, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import ThemeToggle from './ThemeToggle';
+import FileCard from './FileCard';
 
 export interface UploadedFile {
   file: File;
@@ -16,12 +18,12 @@ export interface UploadedFile {
   status: 'pending' | 'uploading' | 'success' | 'error';
   progress: number;
   error?: string;
+  content?: string;
 }
 
 export interface PromptConfig {
   name: string;
   type: 'text' | 'chat';
-  model: string;
   temperature: number;
   labels: string[];
   supportedLanguages: string[];
@@ -34,7 +36,6 @@ const FileUpload: React.FC = () => {
   const [config, setConfig] = useState<PromptConfig>({
     name: '',
     type: 'text',
-    model: 'gpt-4o',
     temperature: 0.7,
     labels: ['production'],
     supportedLanguages: ['en']
@@ -61,13 +62,19 @@ const FileUpload: React.FC = () => {
     addFiles(droppedFiles);
   }, []);
 
-  const addFiles = (newFiles: File[]) => {
-    const uploadedFiles: UploadedFile[] = newFiles.map(file => ({
-      file,
-      id: Math.random().toString(36).substring(7),
-      status: 'pending',
-      progress: 0
-    }));
+  const addFiles = async (newFiles: File[]) => {
+    const uploadedFiles: UploadedFile[] = await Promise.all(
+      newFiles.map(async (file) => {
+        const content = await file.text();
+        return {
+          file,
+          id: Math.random().toString(36).substring(7),
+          status: 'pending' as const,
+          progress: 0,
+          content
+        };
+      })
+    );
     
     setFiles(prev => [...prev, ...uploadedFiles]);
   };
@@ -80,10 +87,16 @@ const FileUpload: React.FC = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      addFiles(Array.from(e.target.files));
+      await addFiles(Array.from(e.target.files));
     }
+  };
+
+  const updateFileContent = (id: string, newContent: string) => {
+    setFiles(prev => prev.map(f => 
+      f.id === id ? { ...f, content: newContent } : f
+    ));
   };
 
   const uploadFile = async (uploadedFile: UploadedFile): Promise<void> => {
@@ -97,8 +110,8 @@ const FileUpload: React.FC = () => {
           : f
       ));
 
-      // Read file content
-      const content = await file.text();
+      // Use the stored content from the file
+      const content = uploadedFile.content || '';
       
       // Simulate upload progress
       for (let progress = 0; progress <= 100; progress += 10) {
@@ -121,7 +134,6 @@ const FileUpload: React.FC = () => {
         ],
         labels: config.labels,
         config: {
-          model: config.model,
           temperature: config.temperature,
           supported_languages: config.supportedLanguages,
         }
@@ -206,10 +218,15 @@ const FileUpload: React.FC = () => {
 
   return (
     <div className="space-y-8">
+      {/* Header with Theme Toggle */}
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-foreground">Prompt File Upload</h2>
+        <ThemeToggle />
+      </div>
       {/* Configuration Section */}
       <Card className="p-6 bg-gradient-to-br from-card to-secondary/10 border-border/50 backdrop-blur-sm">
         <h3 className="text-lg font-semibold mb-4 text-foreground">Prompt Configuration</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-2">
             <Label htmlFor="prompt-name">Prompt Name</Label>
             <Input
@@ -234,23 +251,6 @@ const FileUpload: React.FC = () => {
               <SelectContent>
                 <SelectItem value="text">Text</SelectItem>
                 <SelectItem value="chat">Chat</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div className="space-y-2">
-            <Label>Model</Label>
-            <Select value={config.model} onValueChange={(value) => 
-              setConfig(prev => ({ ...prev, model: value }))
-            }>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="gpt-4o">GPT-4O</SelectItem>
-                <SelectItem value="gpt-4">GPT-4</SelectItem>
-                <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
-                <SelectItem value="claude-3">Claude 3</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -309,50 +309,71 @@ const FileUpload: React.FC = () => {
         </div>
       </div>
 
-      {/* File List */}
-      {files.length > 0 && (
+      {/* Uploaded Files Grid */}
+      {files.filter(f => f.status === 'success').length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold mb-4 text-foreground">Uploaded Files</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {files
+              .filter(f => f.status === 'success')
+              .map((uploadedFile) => (
+                <FileCard
+                  key={uploadedFile.id}
+                  uploadedFile={uploadedFile}
+                  content={uploadedFile.content || ''}
+                  onContentUpdate={updateFileContent}
+                />
+              ))}
+          </div>
+        </div>
+      )}
+
+      {/* Processing Files */}
+      {files.filter(f => f.status !== 'success').length > 0 && (
         <Card className="p-6 bg-gradient-to-br from-card to-secondary/10 border-border/50">
-          <h3 className="text-lg font-semibold mb-4 text-foreground">Selected Files</h3>
+          <h3 className="text-lg font-semibold mb-4 text-foreground">Processing Files</h3>
           <div className="space-y-3">
-            {files.map((uploadedFile) => (
-              <div
-                key={uploadedFile.id}
-                className="flex items-center justify-between p-3 bg-upload-zone rounded-lg border border-border/50"
-              >
-                <div className="flex items-center space-x-3 flex-1">
-                  {getStatusIcon(uploadedFile.status)}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {uploadedFile.file.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {(uploadedFile.file.size / 1024).toFixed(1)} KB
-                    </p>
-                  </div>
-                </div>
-                
-                {uploadedFile.status === 'uploading' && (
-                  <div className="w-24 mr-3">
-                    <Progress value={uploadedFile.progress} className="h-2" />
-                  </div>
-                )}
-                
-                {uploadedFile.status === 'error' && (
-                  <p className="text-xs text-destructive mr-3">
-                    {uploadedFile.error}
-                  </p>
-                )}
-                
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => removeFile(uploadedFile.id)}
-                  disabled={uploadedFile.status === 'uploading'}
+            {files
+              .filter(f => f.status !== 'success')
+              .map((uploadedFile) => (
+                <div
+                  key={uploadedFile.id}
+                  className="flex items-center justify-between p-3 bg-upload-zone rounded-lg border border-border/50"
                 >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
+                  <div className="flex items-center space-x-3 flex-1">
+                    {getStatusIcon(uploadedFile.status)}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {uploadedFile.file.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {(uploadedFile.file.size / 1024).toFixed(1)} KB
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {uploadedFile.status === 'uploading' && (
+                    <div className="w-24 mr-3">
+                      <Progress value={uploadedFile.progress} className="h-2" />
+                    </div>
+                  )}
+                  
+                  {uploadedFile.status === 'error' && (
+                    <p className="text-xs text-destructive mr-3">
+                      {uploadedFile.error}
+                    </p>
+                  )}
+                  
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeFile(uploadedFile.id)}
+                    disabled={uploadedFile.status === 'uploading'}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
           </div>
         </Card>
       )}
